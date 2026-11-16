@@ -1125,6 +1125,7 @@ body.shelf {
     transform: none !important;
     backface-visibility: visible !important;
     -webkit-backface-visibility: visible !important;
+    container-type: normal !important;
     overflow: hidden !important;
     padding: 0 !important;
     background: #fff !important;

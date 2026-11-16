@@ -1136,6 +1136,7 @@ body.shelf {
     transform: none !important;
     backface-visibility: visible !important;
     -webkit-backface-visibility: visible !important;
+    container-type: normal !important;
     overflow: hidden !important;
     padding: 0 !important;
     background: #fff !important;
@@ -2020,32 +2021,18 @@ function renderMobileStack() {
   });
 
   const curFace = document.getElementById("trang-" + mobilePage);
-  const nextFace = document.getElementById("trang-" + (mobilePage + 1));
 
   document.querySelectorAll(".face.doc-face").forEach((f) => {
     f.style.clipPath = "";
     f.style.transform = "";
     f.style.transition = "";
-    if (f !== curFace && f !== nextFace) {
+    if (f !== curFace) {
       f.style.display = "none";
       f.style.zIndex = "1";
       f.style.pointerEvents = "none";
       f.setAttribute("aria-hidden", "true");
     }
   });
-
-  if (nextFace) {
-    const nextSheet = nextFace.closest(".sheet");
-    if (nextSheet && nextSheet !== (curFace && curFace.closest(".sheet"))) {
-      nextSheet.style.zIndex = "8";
-    }
-    nextFace.style.display = "block";
-    nextFace.style.visibility = "visible";
-    nextFace.style.opacity = "1";
-    nextFace.style.zIndex = "8";
-    nextFace.style.pointerEvents = "none";
-    nextFace.setAttribute("aria-hidden", "true");
-  }
 
   if (curFace) {
     const curSheet = curFace.closest(".sheet");
@@ -2648,7 +2635,8 @@ window.addEventListener("pointermove", (event) => {
   const dy = event.clientY - drag.y;
 
   if (!drag.active) {
-    if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy) * 0.9) return;
+    const minDx = drag.isPhone ? 16 : 6;
+    if (Math.abs(dx) < minDx || Math.abs(dx) < Math.abs(dy) * 1.05) return;
     if (drag.isPhone) {
       const next = dx < 0 && mobilePage < pageCount;
       const prev = dx > 0 && mobilePage > 1;
@@ -2719,10 +2707,10 @@ function finishDrag(event) {
   }
 
   if (state.isPhone) {
-    const flicked = state.direction === "next" ? state.vx < -0.3 : state.vx > 0.3;
+    const flicked = state.direction === "next" ? state.vx < -0.18 : state.vx > 0.18;
     const commit = state.direction === "next"
-      ? (state.progress >= 0.28 || (flicked && state.progress > 0.06))
-      : (state.progress <= 0.72 || (flicked && state.progress < 0.94));
+      ? (state.progress >= 0.14 || (flicked && state.progress > 0.04))
+      : (state.progress <= 0.86 || (flicked && state.progress < 0.96));
     const dest = state.direction === "next" ? (commit ? 1.0 : 0.0) : (commit ? 0.0 : 1.0);
     glideMobile(state.topFace, state.underFace, state.progress, dest, state.corner, state.yOffset || 0, flicked, () => {
       if (commit) {
