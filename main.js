@@ -76,7 +76,7 @@ function ensureBgMusic() {
     bgAudio.src = window.INLINE_BG_MUSIC || encodeURI("audio/Background_Bài ca Trường ĐTCB (Cover)1.mp3");
     bgAudio.loop = true;
     bgAudio.volume = bgVolume;
-    bgAudio.preload = "auto";
+    bgAudio.preload = window.INLINE_BG_MUSIC ? "auto" : "none";
 
     bgAudio.addEventListener("ended", () => {
       bgAudio.currentTime = 0;
@@ -650,6 +650,7 @@ function glideDesktop(sheet, fromAngle, toAngle, done, corner = "bottom", fromPo
 
 function goDesktop(to, corner = "bottom") {
   to = clamp(to, 0, sheets.length);
+  if (window.ensureNearbyPages) window.ensureNearbyPages(to * 2 + 1);
   if (busy || to === cursor) {
     if (!busy && to === cursor) stackDesktop();
     return;
@@ -1284,6 +1285,7 @@ rail.addEventListener("click", (event) => {
   closeMenu();
 
   const targetPage = Number(match[1]);
+  if (window.ensureNearbyPages) window.ensureNearbyPages(targetPage);
   if (zoomScale > 1.01) applyZoom(zoomScale, 0, 99999);
   if (phoneOn()) {
     goToMobilePage(targetPage);
@@ -1345,9 +1347,16 @@ if (initialMatch) {
 syncLayout();
 phoneQuery.addEventListener("change", syncLayout);
 
-// Initialize music
-ensureBgMusic();
-if (!bgMusicPaused) {
-  startBed();
+// Initialize music (defer network MP3 until initial visible pages load or user interacts)
+if (window.INLINE_BG_MUSIC) {
+  ensureBgMusic();
+  if (!bgMusicPaused) {
+    startBed();
+  }
+  updateMusicUI();
+} else {
+  updateMusicUI();
+  window.addEventListener("load", () => {
+    if (!bgMusicPaused) startBed();
+  }, { once: true });
 }
-updateMusicUI();
