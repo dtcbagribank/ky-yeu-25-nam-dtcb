@@ -115,6 +115,12 @@ a { color: inherit; }
   display: block;
   fill: currentColor;
 }
+.sound-btn.zoom-btn.is-active {
+  background: #ffe9be;
+  color: #741024;
+  border-color: #fff;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
 .sound-btn:disabled { opacity: 0.4; cursor: default; }
 .volume {
   display: flex;
@@ -233,24 +239,25 @@ a { color: inherit; }
   height: 100%;
   display: grid;
   place-items: center;
+  overflow: hidden;
+  overscroll-behavior: none;
   padding: calc(var(--bar) + env(safe-area-inset-top) + 16px) 28px 18px;
 }
 .turn-btn {
   position: absolute;
-  top: calc(var(--bar) + env(safe-area-inset-top) + (100dvh - var(--bar) - env(safe-area-inset-top)) / 2);
+  top: calc(var(--bar) + env(safe-area-inset-top) + 12px);
   z-index: 24;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(25, 84, 62, 0.14);
   border-radius: 50%;
-  background: #fff;
+  background: rgba(255, 255, 255, 0.96);
   color: var(--green);
-  box-shadow: 0 8px 22px rgba(34, 34, 34, 0.16);
+  box-shadow: 0 6px 18px rgba(34, 34, 34, 0.14);
   cursor: pointer;
-  transform: translateY(-50%);
 }
 .turn-btn svg { width: 22px; height: 22px; display: block; }
 .turn-btn:disabled { opacity: 0.35; cursor: default; }
@@ -274,6 +281,136 @@ a { color: inherit; }
 .book.is-grabbing { cursor: grabbing; }
 .book a, .book button { cursor: pointer; }
 .book.is-grabbing .face { user-select: none; }
+
+.zoom-stage {
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  display: grid;
+  place-items: center;
+  transform-origin: center center;
+  transition: transform 0.16s ease-out;
+  touch-action: none;
+}
+body.is-zoom-panning .zoom-stage {
+  transition: none;
+}
+body.is-zoomed .book {
+  cursor: grab;
+}
+body.is-zoom-panning .book {
+  cursor: grabbing;
+}
+body.is-zoom-panning .face {
+  user-select: none;
+}
+body.is-zoomed .face {
+  will-change: auto !important;
+}
+
+.zoom-bar {
+  position: absolute;
+  left: 50%;
+  bottom: max(14px, calc(env(safe-area-inset-bottom) + 10px));
+  transform: translateX(-50%);
+  z-index: 26;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(94, 15, 31, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: 0 10px 26px rgba(24, 6, 10, 0.34);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.zoom-bar[hidden] {
+  display: none !important;
+}
+.zoom-bar__btn {
+  appearance: none;
+  border: 0;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+.zoom-bar__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.28);
+}
+.zoom-bar__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.zoom-bar__reset {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 10px;
+  background: #fff;
+  color: #8e1d34;
+}
+.zoom-bar__reset:hover:not(:disabled) {
+  background: #ffe9be;
+}
+.zoom-bar__level {
+  min-width: 46px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+@media (max-width: 760px) {
+  .stage > .turn-btn {
+    top: calc(var(--bar) + env(safe-area-inset-top) + 8px) !important;
+    width: 38px !important;
+    height: 38px !important;
+    transform: none !important;
+  }
+  .stage > .turn-prev {
+    left: 10px !important;
+  }
+  .stage > .turn-next {
+    right: 10px !important;
+  }
+  .zoom-bar {
+    bottom: max(12px, calc(env(safe-area-inset-bottom) + 8px));
+    padding: 5px 7px;
+    gap: 4px;
+  }
+  .zoom-bar__btn {
+    min-width: 32px;
+    height: 32px;
+  }
+  .zoom-bar__level {
+    min-width: 42px;
+    font-size: 12.5px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar .logo {
+    max-width: 28vw !important;
+    width: auto !important;
+    object-fit: contain;
+  }
+  .topbar .page-status {
+    font-size: 12px !important;
+    margin: 0 2px !important;
+  }
+}
 
 .board {
   position: absolute;

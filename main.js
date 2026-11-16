@@ -740,14 +740,19 @@ function syncLayout() {
     });
     stackDesktop();
   }
+  if (typeof zoomScale === "number" && zoomScale > 1.01) {
+    applyZoom(zoomScale, zoomTx, zoomTy);
+  }
 }
 
 function turnNext() {
+  if (zoomScale > 1.01) applyZoom(zoomScale, 0, 99999);
   if (phoneOn()) flipMobileNext("bottom");
   else goDesktop(cursor + 1, "bottom");
 }
 
 function turnPrev() {
+  if (zoomScale > 1.01) applyZoom(zoomScale, 0, 99999);
   if (phoneOn()) flipMobilePrev("bottom");
   else goDesktop(cursor - 1, "bottom");
 }
@@ -795,10 +800,302 @@ document.querySelector(".turn-prev").addEventListener("click", turnPrev);
 document.querySelector(".turn-next").addEventListener("click", turnNext);
 
 // -------------------------------------------------------------
+// ZOOM & PAN CONTROLS (DESKTOP + MOBILE)
+// -------------------------------------------------------------
+const stageEl = document.querySelector(".stage");
+const zoomStage = document.getElementById("zoom-stage");
+const zoomToggleBtn = document.getElementById("zoom-toggle");
+const zoomBar = document.getElementById("zoom-bar");
+const zoomOutBtn = document.getElementById("zoom-out");
+const zoomInBtn = document.getElementById("zoom-in");
+const zoomResetBtn = document.getElementById("zoom-reset");
+const zoomLevelEl = document.getElementById("zoom-level");
+
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 3.5;
+const ZOOM_STEP = 0.5;
+const DEFAULT_TOGGLE_ZOOM = 2;
+
+let zoomScale = 1;
+let zoomTx = 0;
+let zoomTy = 0;
+let panDrag = null;
+let pinch = null;
+let pinchCooldownUntil = 0;
+let lastZoomTap = null;
+let wheelPanTimer = 0;
+
+function getVisiblePageBounds() {
+  const sw = stageEl ? stageEl.clientWidth : window.innerWidth;
+  const sh = stageEl ? stageEl.clientHeight : window.innerHeight;
+  if (!frame) return { vw: sw, vh: sh, sw, sh };
+  const fw = frame.offsetWidth || sw;
+  const fh = frame.offsetHeight || sh;
+  if (phoneOn()) {
+    const activeFace = document.getElementById(`trang-${mobilePage}`);
+    const vw = (activeFace && activeFace.offsetWidth) || fw;
+    const vh = (activeFace && activeFace.offsetHeight) || fh;
+    return { vw, vh, sw, sh };
+  }
+  const isCover = cursor === 0 || cursor >= sheets.length;
+  const sheetW = sheets[0] && sheets[0].offsetWidth ? sheets[0].offsetWidth : fw / 2;
+  const vw = isCover ? sheetW : fw;
+  return { vw, vh: fh, sw, sh };
+}
+
+function clampPan(scale, tx, ty) {
+  if (scale <= 1.001) return { tx: 0, ty: 0 };
+  const { vw, vh, sw, sh } = getVisiblePageBounds();
+  const cs = stageEl ? getComputedStyle(stageEl) : null;
+  const padL = cs ? (parseFloat(cs.paddingLeft) || 0) : 0;
+  const padR = cs ? (parseFloat(cs.paddingRight) || 0) : 0;
+  const padT = cs ? (parseFloat(cs.paddingTop) || 0) : 0;
+  const padB = cs ? (parseFloat(cs.paddingBottom) || 0) : 0;
+  const innerW = Math.max(120, sw - padL - padR);
+  const innerH = Math.max(120, sh - padT - padB);
+  const sr = stageEl ? stageEl.getBoundingClientRect() : { left: 0, top: 0, bottom: sh };
+  const cy = sr.top + sh / 2;
+  const midY0 = sr.top + padT + innerH / 2;
+  const dyOff = midY0 - cy;
+
+  let minTx = 0;
+  let maxTx = 0;
+  if (vw * scale > innerW) {
+    const overX = (vw * scale - innerW) / 2 + 24;
+    minTx = -overX;
+    maxTx = overX;
+  }
+
+  let minTy = 0;
+  let maxTy = 0;
+  if (vh * scale > innerH) {
+    maxTy = (sr.top + padT) - cy - scale * (dyOff - vh / 2);
+    minTy = (sr.bottom - padB - 52) - cy - scale * (dyOff + vh / 2);
+    if (minTy > maxTy) {
+      const midTy = (minTy + maxTy) / 2;
+      minTy = midTy;
+      maxTy = midTy;
+    }
+  }
+  return {
+    tx: clamp(tx, minTx, maxTx),
+    ty: clamp(ty, minTy, maxTy),
+  };
+}
+
+function getZoomStageBaseCenter() {
+  if (!stageEl) return { cx: window.innerWidth / 2, cy: window.innerHeight / 2 };
+  const sr = stageEl.getBoundingClientRect();
+  return {
+    cx: sr.left + sr.width / 2,
+    cy: sr.top + sr.height / 2,
+  };
+}
+
+function applyZoom(scale, tx = zoomTx, ty = zoomTy) {
+  const nextScale = clamp(scale, MIN_ZOOM, MAX_ZOOM);
+  if (nextScale <= 1.01) {
+    zoomScale = 1;
+    zoomTx = 0;
+    zoomTy = 0;
+  } else {
+    zoomScale = nextScale;
+    const clamped = clampPan(zoomScale, tx, ty);
+    zoomTx = clamped.tx;
+    zoomTy = clamped.ty;
+  }
+
+  const active = zoomScale > 1.01;
+  if (active && hoverOn) {
+    hoverOn = false;
+    if (!phoneOn()) stackDesktop();
+  }
+  document.body.classList.toggle("is-zoomed", active);
+  if (!active) document.body.classList.remove("is-zoom-panning");
+
+  if (zoomStage) {
+    zoomStage.style.transform = active
+      ? `translate3d(${zoomTx.toFixed(1)}px, ${zoomTy.toFixed(1)}px, 0) scale(${zoomScale.toFixed(4)})`
+      : "";
+  }
+  if (zoomToggleBtn) {
+    zoomToggleBtn.setAttribute("aria-pressed", String(active));
+    zoomToggleBtn.classList.toggle("is-active", active);
+  }
+  if (zoomBar) zoomBar.hidden = !active;
+  if (zoomLevelEl) zoomLevelEl.textContent = `${Math.round(zoomScale * 100)}%`;
+  if (zoomOutBtn) zoomOutBtn.disabled = zoomScale <= MIN_ZOOM + 0.01;
+  if (zoomInBtn) zoomInBtn.disabled = zoomScale >= MAX_ZOOM - 0.01;
+}
+
+function zoomAtPoint(nextScale, clientX, clientY) {
+  const targetScale = clamp(nextScale, MIN_ZOOM, MAX_ZOOM);
+  if (targetScale <= 1.01) {
+    applyZoom(1, 0, 0);
+    return;
+  }
+  const { cx, cy } = getZoomStageBaseCenter();
+  const ratio = targetScale / (zoomScale || 1);
+  const newTx = clientX - cx - ratio * (clientX - cx - zoomTx);
+  const newTy = clientY - cy - ratio * (clientY - cy - zoomTy);
+  applyZoom(targetScale, newTx, newTy);
+}
+
+if (zoomToggleBtn) {
+  zoomToggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (zoomScale > 1.01) applyZoom(1, 0, 0);
+    else applyZoom(DEFAULT_TOGGLE_ZOOM, 0, 99999);
+  });
+}
+if (zoomInBtn) {
+  zoomInBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    applyZoom(zoomScale + ZOOM_STEP, zoomTx, zoomTy);
+  });
+}
+if (zoomOutBtn) {
+  zoomOutBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    applyZoom(zoomScale - ZOOM_STEP, zoomTx, zoomTy);
+  });
+}
+if (zoomResetBtn) {
+  zoomResetBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    applyZoom(1, 0, 0);
+  });
+}
+
+if (stageEl) {
+  stageEl.addEventListener("pointerdown", (event) => {
+    if (zoomScale <= 1.01 || pinch || drag) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (event.target.closest(".turn-btn, #zoom-bar, .zoom-bar, a, button")) return;
+    if (event.pointerType === "mouse") event.preventDefault();
+    panDrag = {
+      id: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      baseTx: zoomTx,
+      baseTy: zoomTy,
+      moved: false,
+      isTouch: event.pointerType !== "mouse",
+      downT: performance.now(),
+    };
+    document.body.classList.add("is-zoom-panning");
+    try { stageEl.setPointerCapture(event.pointerId); } catch {}
+  });
+
+  window.addEventListener("pointermove", (event) => {
+    if (!panDrag || event.pointerId !== panDrag.id || pinch) return;
+    const dx = event.clientX - panDrag.startX;
+    const dy = event.clientY - panDrag.startY;
+    if (Math.hypot(dx, dy) > 4) panDrag.moved = true;
+    applyZoom(zoomScale, panDrag.baseTx + dx, panDrag.baseTy + dy);
+  });
+
+  const endPan = (event) => {
+    if (!panDrag || event.pointerId !== panDrag.id) return;
+    const finished = panDrag;
+    panDrag = null;
+    document.body.classList.remove("is-zoom-panning");
+    try { stageEl.releasePointerCapture(finished.id); } catch {}
+    if (!finished.moved && finished.isTouch && performance.now() - finished.downT < 280) {
+      const now = performance.now();
+      if (lastZoomTap && now - lastZoomTap.t < 320 && Math.hypot(event.clientX - lastZoomTap.x, event.clientY - lastZoomTap.y) < 34) {
+        lastZoomTap = null;
+        applyZoom(1, 0, 0);
+      } else {
+        lastZoomTap = { x: event.clientX, y: event.clientY, t: now };
+      }
+    }
+  };
+  window.addEventListener("pointerup", endPan);
+  window.addEventListener("pointercancel", endPan);
+
+  stageEl.addEventListener("dblclick", (event) => {
+    if (event.target.closest(".turn-btn, #zoom-bar, .zoom-bar, a, button")) return;
+    if (zoomScale > 1.01) applyZoom(1, 0, 0);
+  });
+
+  stageEl.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      if (drag) {
+        if (drag.active) syncLayout();
+        else {
+          drag = null;
+          book.classList.remove("is-grabbing");
+        }
+      }
+      panDrag = null;
+      const t0 = event.touches[0];
+      const t1 = event.touches[1];
+      pinch = {
+        d0: Math.max(12, Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY)),
+        s0: zoomScale,
+        tx0: zoomTx,
+        ty0: zoomTy,
+        mx0: (t0.clientX + t1.clientX) / 2,
+        my0: (t0.clientY + t1.clientY) / 2,
+      };
+      document.body.classList.add("is-zoom-panning");
+    }
+  }, { passive: false });
+
+  stageEl.addEventListener("touchmove", (event) => {
+    if (!pinch || event.touches.length < 2) return;
+    event.preventDefault();
+    const t0 = event.touches[0];
+    const t1 = event.touches[1];
+    const d = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    const mx = (t0.clientX + t1.clientX) / 2;
+    const my = (t0.clientY + t1.clientY) / 2;
+    const s = clamp(pinch.s0 * (d / pinch.d0), MIN_ZOOM, MAX_ZOOM);
+    const { cx, cy } = getZoomStageBaseCenter();
+    const u = (pinch.mx0 - cx - pinch.tx0) / (pinch.s0 || 1);
+    const v = (pinch.my0 - cy - pinch.ty0) / (pinch.s0 || 1);
+    applyZoom(s, mx - cx - s * u, my - cy - s * v);
+  }, { passive: false });
+
+  const endPinch = (event) => {
+    if (!pinch || event.touches.length >= 2) return;
+    pinch = null;
+    pinchCooldownUntil = performance.now() + 260;
+    document.body.classList.remove("is-zoom-panning");
+    if (zoomScale <= 1.08) applyZoom(1, 0, 0);
+  };
+  stageEl.addEventListener("touchend", endPinch);
+  stageEl.addEventListener("touchcancel", endPinch);
+
+  stageEl.addEventListener("wheel", (event) => {
+    if (event.ctrlKey || event.metaKey) {
+      event.preventDefault();
+      document.body.classList.add("is-zoom-panning");
+      clearTimeout(wheelPanTimer);
+      wheelPanTimer = setTimeout(() => document.body.classList.remove("is-zoom-panning"), 140);
+      const factor = Math.exp(-event.deltaY * 0.004);
+      zoomAtPoint(zoomScale * factor, event.clientX, event.clientY);
+    } else if (zoomScale > 1.01) {
+      event.preventDefault();
+      document.body.classList.add("is-zoom-panning");
+      clearTimeout(wheelPanTimer);
+      wheelPanTimer = setTimeout(() => document.body.classList.remove("is-zoom-panning"), 140);
+      applyZoom(zoomScale, zoomTx - event.deltaX, zoomTy - event.deltaY);
+    }
+  }, { passive: false });
+}
+
+window.addEventListener("resize", () => {
+  if (zoomScale > 1.01) applyZoom(zoomScale, zoomTx, zoomTy);
+});
+
+// -------------------------------------------------------------
 // UNIFIED POINTER INTERACTION (TOUCH DRAG-TO-CURL + MOUSE CURL)
 // -------------------------------------------------------------
 book.addEventListener("pointerdown", (event) => {
-  if (busy || drag) return;
+  if (busy || drag || pinch || performance.now() < pinchCooldownUntil || zoomScale > 1.01) return;
   if (event.pointerType === "mouse" && event.button !== 0) return;
   if (event.target.closest("a, button")) return;
   if (!phoneOn()) event.preventDefault();
@@ -944,7 +1241,7 @@ window.addEventListener("pointercancel", finishDrag);
 
 // Desktop hover corner dog-ear cue
 book.addEventListener("pointermove", (event) => {
-  if (drag || busy || reduced || phoneOn()) return;
+  if (drag || busy || reduced || phoneOn() || zoomScale > 1.01) return;
   if (event.pointerType && event.pointerType !== "mouse") return;
   const page = pageBox();
   const box = book.getBoundingClientRect();
@@ -987,6 +1284,7 @@ rail.addEventListener("click", (event) => {
   closeMenu();
 
   const targetPage = Number(match[1]);
+  if (zoomScale > 1.01) applyZoom(zoomScale, 0, 99999);
   if (phoneOn()) {
     goToMobilePage(targetPage);
   } else {
@@ -997,9 +1295,25 @@ rail.addEventListener("click", (event) => {
 
 // Keyboard navigation
 window.addEventListener("keydown", (event) => {
+  if (event.target && event.target.closest("input, textarea, select")) return;
   if (event.key === "ArrowRight") turnNext();
   if (event.key === "ArrowLeft") turnPrev();
-  if (event.key === "Escape") closeMenu();
+  if (event.key === "+" || event.key === "=") {
+    event.preventDefault();
+    applyZoom(zoomScale + ZOOM_STEP, zoomTx, zoomTy);
+  }
+  if (event.key === "-" || event.key === "_") {
+    event.preventDefault();
+    applyZoom(zoomScale - ZOOM_STEP, zoomTx, zoomTy);
+  }
+  if (event.key === "0" && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault();
+    applyZoom(1, 0, 0);
+  }
+  if (event.key === "Escape") {
+    if (rail.classList.contains("is-open")) closeMenu();
+    else if (zoomScale > 1.01) applyZoom(1, 0, 0);
+  }
 });
 
 // Music Toggle Button
