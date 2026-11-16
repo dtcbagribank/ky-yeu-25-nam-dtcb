@@ -429,11 +429,12 @@ body.is-zoomed .face {
   bottom: 0;
   width: 50%;
   z-index: 1;
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
   gap: 8px;
-  padding: 36px 42px 40px;
+  padding: clamp(14px, 4dvh, 36px) clamp(14px, min(3vw, 4.5dvh), 42px) clamp(16px, 4.5dvh, 40px);
   color: var(--ink);
   background:
     radial-gradient(420px 180px at 20% 0%, rgba(208, 18, 45, 0.08), transparent 60%),
@@ -468,6 +469,20 @@ body.is-zoomed .face {
   color: var(--green);
 }
 .board-years { color: var(--muted); letter-spacing: 0.12em; }
+.board-sub {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  max-width: 100%;
+  font-size: clamp(7.5px, 4.3cqw, 13px);
+  line-height: 1.45;
+  color: var(--ink);
+}
+.board-sub span {
+  display: block;
+  white-space: nowrap;
+}
 
 .spine {
   position: absolute;
@@ -1467,7 +1482,7 @@ body.shelf {
         </div>
         <div class="board board-right">
           <p class="board-title">Hết</p>
-          <p>Trường Đào tạo cán bộ Agribank · Ghi dấu hành trình – Lan tỏa giá trị.</p>
+          <p class="board-sub"><span>Trường Đào tạo cán bộ Agribank</span><span>Vun đắp tri thức - Kiến tạo tương lai</span></p>
         </div>
         <div class="spine" aria-hidden="true"></div>
         <div class="cast" aria-hidden="true"></div>
