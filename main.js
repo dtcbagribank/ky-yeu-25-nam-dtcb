@@ -9,7 +9,16 @@ const status = document.querySelector("#page-status");
 const links = [...rail.querySelectorAll("a")];
 const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const phoneQuery = window.matchMedia("(max-width: 760px)");
+const endBoardEl = book.querySelector(".board-right");
 const pageCount = sheets.length * 2;
+function mobileMaxPage() {
+  return endBoardEl ? pageCount + 1 : pageCount;
+}
+function getMobileFaceEl(num) {
+  if (num >= 1 && num <= pageCount) return document.getElementById("trang-" + num);
+  if (num === pageCount + 1 && endBoardEl) return endBoardEl;
+  return null;
+}
 
 const mobileShadeEl = document.getElementById("mobile-curl-shade");
 const mobileFlapEl = document.getElementById("mobile-curl-flap");
@@ -217,7 +226,7 @@ function hideMobileCurlOverlay() {
 }
 
 function renderMobileStack() {
-  if (window.ensureNearbyPages) window.ensureNearbyPages(mobilePage);
+  if (window.ensureNearbyPages) window.ensureNearbyPages(Math.min(pageCount, mobilePage));
   hideMobileCurlOverlay();
 
   sheets.forEach((s) => {
@@ -226,7 +235,17 @@ function renderMobileStack() {
     s.classList.remove("is-curling", "is-turned");
   });
 
-  const curFace = document.getElementById("trang-" + mobilePage);
+  const curFace = getMobileFaceEl(mobilePage);
+
+  if (endBoardEl) {
+    endBoardEl.classList.remove("is-mobile-shown");
+    endBoardEl.style.clipPath = "";
+    endBoardEl.style.transform = "";
+    endBoardEl.style.transition = "";
+    endBoardEl.style.zIndex = "";
+    endBoardEl.style.pointerEvents = "none";
+    endBoardEl.setAttribute("aria-hidden", "true");
+  }
 
   document.querySelectorAll(".face.doc-face").forEach((f) => {
     f.style.clipPath = "";
@@ -240,7 +259,15 @@ function renderMobileStack() {
     }
   });
 
-  if (curFace) {
+  const isEnd = Boolean(endBoardEl && curFace === endBoardEl);
+  if (isEnd) {
+    endBoardEl.classList.add("is-mobile-shown");
+    endBoardEl.style.visibility = "visible";
+    endBoardEl.style.opacity = "1";
+    endBoardEl.style.zIndex = "10";
+    endBoardEl.style.pointerEvents = "auto";
+    endBoardEl.setAttribute("aria-hidden", "false");
+  } else if (curFace) {
     const curSheet = curFace.closest(".sheet");
     if (curSheet) curSheet.style.zIndex = "10";
     curFace.style.display = "block";
@@ -251,17 +278,22 @@ function renderMobileStack() {
     curFace.setAttribute("aria-hidden", "false");
   }
 
-  status.textContent = `Trang ${mobilePage} / ${pageCount}`;
+  status.textContent = isEnd ? "Hết" : `Trang ${mobilePage} / ${pageCount}`;
   updateTurnButtons();
-  highlightActiveMenu([curFace]);
-  history.replaceState(null, "", `#trang-${mobilePage}`);
+  highlightActiveMenu(isEnd ? [document.getElementById("trang-" + pageCount)] : [curFace]);
+  history.replaceState(null, "", isEnd ? "#het" : `#trang-${mobilePage}`);
 }
 
 function prepareMobileCurlPair(topFace, underFace) {
-  if (window.ensureNearbyPages) window.ensureNearbyPages(mobilePage);
+  if (window.ensureNearbyPages) window.ensureNearbyPages(Math.min(pageCount, mobilePage));
   sheets.forEach((s) => {
     s.style.zIndex = "1";
   });
+  if (endBoardEl && endBoardEl !== topFace && endBoardEl !== underFace) {
+    endBoardEl.classList.remove("is-mobile-shown");
+    endBoardEl.style.clipPath = "";
+    endBoardEl.style.zIndex = "1";
+  }
   document.querySelectorAll(".face.doc-face").forEach((f) => {
     if (f !== topFace && f !== underFace) {
       f.style.display = "none";
@@ -270,9 +302,13 @@ function prepareMobileCurlPair(topFace, underFace) {
   });
 
   if (underFace) {
-    const us = underFace.closest(".sheet");
-    if (us) us.style.zIndex = "8";
-    underFace.style.display = "block";
+    if (underFace === endBoardEl) {
+      endBoardEl.classList.add("is-mobile-shown");
+    } else {
+      const us = underFace.closest(".sheet");
+      if (us) us.style.zIndex = "8";
+      underFace.style.display = "block";
+    }
     underFace.style.visibility = "visible";
     underFace.style.opacity = "1";
     underFace.style.clipPath = "";
@@ -406,10 +442,10 @@ function glideMobile(topFace, underFace, fromP, toP, corner, customYOffset, flic
 }
 
 function flipMobileNext(corner = "bottom") {
-  if (busy || mobilePage >= pageCount) return;
+  if (busy || mobilePage >= mobileMaxPage()) return;
   playFlip();
-  const topFace = document.getElementById("trang-" + mobilePage);
-  const underFace = document.getElementById("trang-" + (mobilePage + 1));
+  const topFace = getMobileFaceEl(mobilePage);
+  const underFace = getMobileFaceEl(mobilePage + 1);
   prepareMobileCurlPair(topFace, underFace);
   glideMobile(topFace, underFace, 0.015, 1.0, corner, 0, false, () => {
     mobilePage += 1;
@@ -420,8 +456,8 @@ function flipMobileNext(corner = "bottom") {
 function flipMobilePrev(corner = "bottom") {
   if (busy || mobilePage <= 1) return;
   playFlip();
-  const topFace = document.getElementById("trang-" + (mobilePage - 1));
-  const underFace = document.getElementById("trang-" + mobilePage);
+  const topFace = getMobileFaceEl(mobilePage - 1);
+  const underFace = getMobileFaceEl(mobilePage);
   prepareMobileCurlPair(topFace, underFace);
   curlMobile(topFace, underFace, 0.985, corner, 0);
   glideMobile(topFace, underFace, 0.985, 0.0, corner, 0, false, () => {
@@ -431,7 +467,7 @@ function flipMobilePrev(corner = "bottom") {
 }
 
 function goToMobilePage(target) {
-  target = Math.max(1, Math.min(pageCount, Number(target) || 1));
+  target = Math.max(1, Math.min(mobileMaxPage(), Number(target) || 1));
   if (busy) return;
   if (target === mobilePage) {
     renderMobileStack();
@@ -707,9 +743,9 @@ function syncLayout() {
 
   if (onPhone) {
     if (lastModePhone === false) {
-      mobilePage = cursor === sheets.length ? pageCount : clamp(cursor * 2 + 1, 1, pageCount);
+      mobilePage = cursor === sheets.length ? pageCount : clamp(cursor * 2 + 1, 1, mobileMaxPage());
     }
-    mobilePage = clamp(mobilePage || 1, 1, pageCount);
+    mobilePage = clamp(mobilePage || 1, 1, mobileMaxPage());
     lastModePhone = true;
     sheets.forEach((s) => {
       s.classList.remove("is-turned", "is-curling");
@@ -726,9 +762,21 @@ function syncLayout() {
     renderMobileStack();
   } else {
     if (lastModePhone === true) {
-      cursor = clamp(Math.floor(mobilePage / 2), 0, sheets.length);
+      cursor = clamp(Math.floor(Math.min(mobilePage, pageCount) / 2), 0, sheets.length);
     }
     lastModePhone = false;
+    if (endBoardEl) {
+      endBoardEl.classList.remove("is-mobile-shown");
+      endBoardEl.style.display = "";
+      endBoardEl.style.visibility = "";
+      endBoardEl.style.opacity = "";
+      endBoardEl.style.zIndex = "";
+      endBoardEl.style.clipPath = "";
+      endBoardEl.style.transform = "";
+      endBoardEl.style.transition = "";
+      endBoardEl.style.pointerEvents = "";
+      endBoardEl.removeAttribute("aria-hidden");
+    }
     document.querySelectorAll(".face.doc-face").forEach((f) => {
       f.style.display = "";
       f.style.visibility = "";
@@ -764,7 +812,7 @@ function updateTurnButtons() {
   if (!prevBtn || !nextBtn) return;
   if (phoneOn()) {
     prevBtn.disabled = mobilePage <= 1;
-    nextBtn.disabled = mobilePage >= pageCount;
+    nextBtn.disabled = mobilePage >= mobileMaxPage();
   } else {
     prevBtn.disabled = cursor <= 0;
     nextBtn.disabled = cursor >= sheets.length;
@@ -833,7 +881,7 @@ function getVisiblePageBounds() {
   const fw = frame.offsetWidth || sw;
   const fh = frame.offsetHeight || sh;
   if (phoneOn()) {
-    const activeFace = document.getElementById(`trang-${mobilePage}`);
+    const activeFace = getMobileFaceEl(mobilePage);
     const vw = (activeFace && activeFace.offsetWidth) || fw;
     const vh = (activeFace && activeFace.offsetHeight) || fh;
     return { vw, vh, sw, sh };
@@ -1142,13 +1190,13 @@ window.addEventListener("pointermove", (event) => {
     const minDx = drag.isPhone ? 16 : 6;
     if (Math.abs(dx) < minDx || Math.abs(dx) < Math.abs(dy) * 1.05) return;
     if (drag.isPhone) {
-      const next = dx < 0 && mobilePage < pageCount;
+      const next = dx < 0 && mobilePage < mobileMaxPage();
       const prev = dx > 0 && mobilePage > 1;
       if (!next && !prev) return;
       drag.active = true;
       drag.direction = next ? "next" : "prev";
-      drag.topFace = document.getElementById("trang-" + (next ? mobilePage : mobilePage - 1));
-      drag.underFace = document.getElementById("trang-" + (next ? mobilePage + 1 : mobilePage));
+      drag.topFace = getMobileFaceEl(next ? mobilePage : mobilePage - 1);
+      drag.underFace = getMobileFaceEl(next ? mobilePage + 1 : mobilePage);
       prepareMobileCurlPair(drag.topFace, drag.underFace);
       book.classList.add("is-grabbing");
       playFlip();
@@ -1200,7 +1248,7 @@ function finishDrag(event) {
     if (state.isPhone) {
       const relX = event.clientX - state.box.left;
       const w = state.box.width || 340;
-      if (relX > w * 0.65 && mobilePage < pageCount) flipMobileNext(state.corner);
+      if (relX > w * 0.65 && mobilePage < mobileMaxPage()) flipMobileNext(state.corner);
       else if (relX < w * 0.35 && mobilePage > 1) flipMobilePrev(state.corner);
     } else if (hoverOn || (event.pointerType && event.pointerType !== "mouse")) {
       const page = pageBox();
@@ -1337,10 +1385,15 @@ document.addEventListener("click", onFirstGesture, { passive: true });
 
 // Initial Hash check
 const initialHash = location.hash.slice(1);
-const initialMatch = initialHash.match(/^trang-(\d+)$/);
-if (initialMatch) {
-  mobilePage = Math.max(1, Math.min(pageCount, Number(initialMatch[1])));
-  cursor = Math.floor(mobilePage / 2);
+if (initialHash === "het" && endBoardEl) {
+  mobilePage = mobileMaxPage();
+  cursor = sheets.length;
+} else {
+  const initialMatch = initialHash.match(/^trang-(\d+)$/);
+  if (initialMatch) {
+    mobilePage = Math.max(1, Math.min(mobileMaxPage(), Number(initialMatch[1])));
+    cursor = Math.floor(Math.min(mobilePage, pageCount) / 2);
+  }
 }
 
 // Initialize layout
